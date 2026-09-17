@@ -63,6 +63,7 @@ function setup({ browserUA = 'Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15', ava
         ? {}
         : {
             supportsInputFactory: !legacyFFmpeg,
+            supportsProducerProgress: !legacyFFmpeg,
             merge: ({ inputs }) => {
               assert.equal(typeof inputs, 'function');
               const lifetime = new AbortController();
@@ -76,7 +77,7 @@ function setup({ browserUA = 'Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15', ava
                     calls.inputs = [video, audio];
                     if (streamError) throw streamError;
                     c.enqueue(new Uint8Array([1, 2]));
-                  } catch (error) { lifetime.abort(); c.error(error); }
+                  } catch (error) { lifetime.abort(); c.error(error instanceof MessageError ? error : new MessageError(error.message)); }
                 },
                 cancel() { lifetime.abort(); },
               }, { highWaterMark: 0 });

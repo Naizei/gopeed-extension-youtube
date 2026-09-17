@@ -81,9 +81,10 @@ function requireRuntime() {
   if (
     typeof gopeed.runtime?.ffmpeg?.merge !== 'function' ||
     gopeed.runtime.ffmpeg.supportsInputFactory !== true ||
+    gopeed.runtime.ffmpeg.supportsProducerProgress !== true ||
     typeof gopeed.runtime?.blob?.createObjectURL !== 'function'
   ) {
-    throw new MessageError('Please upgrade Gopeed to a build with FFmpeg input factory support.');
+    throw new MessageError('Please upgrade Gopeed to a build with disk-backed media merging support.');
   }
   if (typeof gopeed.runtime?.webview?.isAvailable !== 'function' || !gopeed.runtime.webview.isAvailable()) {
     throw new MessageError('YouTube SABR downloads require an available Gopeed WebView runtime.');
@@ -106,44 +107,6 @@ async function prepareSession(input, quality, fallbackToBest, signal) {
   return await prepared.prepareSession(verification);
 }
 
-function abortableOutput(stream, abort) {
-  const reader = stream.getReader();
-  let stopped = false;
-  function finish() {
-    if (stopped) return;
-    stopped = true;
-    try {
-      abort();
-    } finally {
-      reader.releaseLock();
-    }
-  }
-  return new ReadableStream({
-    async pull(controller) {
-      try {
-        const { done, value } = await reader.read();
-        if (stopped) return;
-        if (done) {
-          controller.close();
-          finish();
-        } else controller.enqueue(value);
-      } catch (error) {
-        if (!stopped) {
-          controller.error(messageError(error));
-          finish();
-        }
-      }
-    },
-    async cancel(reason) {
-      try {
-        await reader.cancel(reason);
-      } finally {
-        finish();
-      }
-    },
-  });
-}
-
 async function createMergedURL(labels) {
   const { input, quality, fallbackToBest } = labels;
   return await gopeed.runtime.blob.createObjectURL(
@@ -157,7 +120,7 @@ async function createMergedURL(labels) {
       };
       const output = gopeed.runtime.ffmpeg.merge({
         inputs: userFacing(async ({ signal }) => {
-          // FFmpeg reserves capacity before any session preparation or media requests.
+          // Inputs download to temporary chunks while FFmpeg waits for capacity.
           const session = await prepareSession(input, quality, fallbackToBest === 'true', signal);
           if (signal.aborted) throw new Error('Download cancelled');
           producer = await session.openStreams();
@@ -169,7 +132,7 @@ async function createMergedURL(labels) {
           return { video: producer.videoStream, audio: producer.audioStream };
         }),
       });
-      return abortableOutput(output, stop);
+      return output;
     },
     { contentType: 'video/mp4', range: false }
   );

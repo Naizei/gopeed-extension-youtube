@@ -112,20 +112,8 @@ async function preparePreparedSabrSessionInternal(prepared, poToken) {
     info,
     context: prepared.yt.session.context,
     selectedFormats,
-    openStreams: async () => {
-      const video = await start(EnabledTrackTypes.VIDEO_ONLY);
-      try {
-        const audio = await start(EnabledTrackTypes.AUDIO_ONLY);
-        return {
-          videoStream: video.videoStream,
-          audioStream: audio.audioStream,
-          abort: () => { video.abort(); audio.abort(); },
-        };
-      } catch (error) {
-        video.abort();
-        throw error;
-      }
-    },
+    // Disk-backed inputs let both tracks drain even when FFmpeg reads one first.
+    openStreams: async () => await start(EnabledTrackTypes.VIDEO_AND_AUDIO),
     openVideoStream: async () => {
       const streams = await start(EnabledTrackTypes.VIDEO_ONLY);
       return {
