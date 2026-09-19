@@ -77,6 +77,13 @@ function getBooleanSetting(name, fallback = false) {
   return Boolean(value);
 }
 
+// gopeed.host only exists on Gopeed v2.0.0-beta and later.
+function requireHostVersion() {
+  if (!gopeed.host?.env?.version) {
+    throw new MessageError('This extension requires Gopeed v2.0.0-beta or later. Please upgrade Gopeed and try again.');
+  }
+}
+
 function requireRuntime() {
   if (
     typeof gopeed.runtime?.ffmpeg?.merge !== 'function' ||
@@ -158,6 +165,7 @@ async function refreshMergedURL(task) {
 
 gopeed.events.onResolve(
   userFacing(async (ctx) => {
+    requireHostVersion();
     requireRuntime();
     const input = ctx.req.url;
     const quality = String(getSetting('quality', '1080p'));

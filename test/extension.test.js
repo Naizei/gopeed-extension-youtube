@@ -9,7 +9,7 @@ vm.runInNewContext(browserSource, browserScope);
 
 const source = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '');
 class MessageError extends Error {}
-function setup({ browserUA = 'Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15', available = true, missingFFmpeg = false, legacyFFmpeg = false, prepareError, playlist, streamError, metadataError } = {}) {
+function setup({ browserUA = 'Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15', available = true, missingFFmpeg = false, legacyFFmpeg = false, legacyHost = false, prepareError, playlist, streamError, metadataError } = {}) {
   const events = {},
     openers = new Map(),
     revoked = [],
@@ -24,6 +24,7 @@ function setup({ browserUA = 'Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15', ava
   const gopeed = {
     info: { identity: 'monkeyWie@youtube' },
     settings: {},
+    ...(legacyHost ? {} : { host: { env: { version: '2.0.0-beta.3', os: 'darwin', arch: 'arm64' } } }),
     events: Object.fromEntries(
       ['onResolve', 'onStart', 'onError'].map((name) => [
         name,
@@ -196,6 +197,13 @@ test('runtime and preparation errors are visible MessageErrors', async () => {
   ]) {
     await assert.rejects(resolve(setup(options)), MessageError);
   }
+});
+
+test('legacy Gopeed without gopeed.host is asked to upgrade on resolve', async () => {
+  await assert.rejects(
+    resolve(setup({ legacyHost: true })),
+    (error) => error instanceof MessageError && /Gopeed v2\.0\.0-beta/.test(error.message)
+  );
 });
 
 test('automatic recovery replaces the source once and does not loop on persistent failures', async () => {
